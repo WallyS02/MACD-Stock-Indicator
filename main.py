@@ -3,9 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import matplotlib
+from shapely.geometry import LineString
+import numpy as np
 
 SAMPLES_NUMBER = 1000
-ALL_SAMPLES_NUMBER = SAMPLES_NUMBER + 100
+ALL_SAMPLES_NUMBER = SAMPLES_NUMBER + 35
 MACD_SAMPLES_NUMBER = SAMPLES_NUMBER + 9
 
 
@@ -52,6 +54,7 @@ def output(MACDsamples, SIGNALsamples, samples, MoneyFlowSamples):
         splittedDate = str(samples.loc[i]['Data']).split('-')
         date = datetime(int(splittedDate[0]), int(splittedDate[1]), int(splittedDate[2]))
         x.append(date)
+    x.reverse()
     plt.plot(x, MACDsamples, linewidth=1.0)
     plt.plot(x, SIGNALsamples, linewidth=1.0)
     plt.title("wykres wskaźnika MACD/SIGNAL")
@@ -63,6 +66,7 @@ def output(MACDsamples, SIGNALsamples, samples, MoneyFlowSamples):
     samplesArray = []
     for i in range(0, SAMPLES_NUMBER):
         samplesArray.append(samples.loc[i]["Zamkniecie"])
+    samplesArray.reverse()
     plt.plot(x, samplesArray, linewidth=1.0)
     plt.xlabel("dni")
     plt.ylabel("wartości ceny zamknięcia")
@@ -98,25 +102,42 @@ def MoneyFlow(samples, today, periods):
 
 
 def simulation(MACDsamples, SIGNALsamples, samples, MoneyFlowSamples):
+    samples = samples.loc[::-1]
+    MACDsamples.reverse()
+    SIGNALsamples.reverse()
+    MoneyFlowSamples.reverse()
+    x = np.arange(0, SAMPLES_NUMBER)
+    first_line = LineString(np.column_stack((x, MACDsamples)))
+    second_line = LineString(np.column_stack((x, SIGNALsamples)))
+    intersection = first_line.intersection(second_line)
+    xs = set()
+    if intersection.geom_type == 'MultiPoint':
+        xs = set(round(point.x) for point in intersection.geoms)
+    elif intersection.geom_type == 'Point':
+        xs.add(round(intersection.x))
+    for i in range(SAMPLES_NUMBER):
+        if MoneyFlowSamples[i] > 80 or MoneyFlowSamples[i] < 20:
+            xs.add(i)
+    xs = list(xs)
+    xs.sort()
     capital = 1000.0
     actions = 0.0
-    lastMACD = float()
-    lastSIGNAL = float()
-    for i in range(SAMPLES_NUMBER - 1, -1, -1):
+    for i in xs:
         if MoneyFlowSamples[i] > 80:
-            capital = capital + (actions * samples.loc[i]["Zamkniecie"])
-            actions = 0
+            actions = actions + (capital / samples.loc[i]["Zamkniecie"])
+            capital = 0.0
+            continue
         if MoneyFlowSamples[i] < 20:
-            actions = actions + (capital / samples.loc[i]["Zamkniecie"])
-            capital = 0
-        if lastMACD > MACDsamples[i] > SIGNALsamples[i] > lastSIGNAL:
             capital = capital + (actions * samples.loc[i]["Zamkniecie"])
-            actions = 0
-        if lastMACD < MACDsamples[i] < SIGNALsamples[i] < lastSIGNAL:
+            actions = 0.0
+            continue
+        if (MACDsamples[i-1] < SIGNALsamples[i-1]) and (SIGNALsamples[i+1] < MACDsamples[i+1]):
+            capital = capital + (actions * samples.loc[i]["Zamkniecie"])
+            actions = 0.0
+            continue
+        if(MACDsamples[i - 1] > SIGNALsamples[i - 1]) and (SIGNALsamples[i+1] > MACDsamples[i+1]):
             actions = actions + (capital / samples.loc[i]["Zamkniecie"])
-            capital = 0
-        lastMACD = MACDsamples[i]
-        lastSIGNAL = SIGNALsamples[i]
+            capital = 0.0
     if actions != 0.0:
         capital = capital + actions * samples.loc[SAMPLES_NUMBER - 1]["Zamkniecie"]
     print(capital)
