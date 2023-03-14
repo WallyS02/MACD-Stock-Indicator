@@ -38,7 +38,8 @@ def SIGNAL(MACDsamples, index):
 def CSVinput():
     path = os.path.dirname(os.path.abspath(__file__))
     path = path + "\\Quotes\\"
-    filename = input('Input file name to process it: ')
+    #filename = input('Input file name to process it: ')
+    filename = "CD projekt"
     path = path + filename
     path = path + '.csv'
     samples = pd.read_csv(path, usecols=['Zamkniecie', 'Data', 'Najwyzszy', 'Najnizszy', 'Wolumen'],
@@ -102,7 +103,8 @@ def MoneyFlow(samples, today, periods):
 
 
 def simulation(MACDsamples, SIGNALsamples, samples, MoneyFlowSamples):
-    samples = samples.loc[::-1]
+    samplesArray = samples["Zamkniecie"].tolist()
+    samplesArray.reverse()
     MACDsamples.reverse()
     SIGNALsamples.reverse()
     MoneyFlowSamples.reverse()
@@ -123,24 +125,29 @@ def simulation(MACDsamples, SIGNALsamples, samples, MoneyFlowSamples):
     capital = 1000.0
     actions = 0.0
     for i in xs:
+        # print(samples.loc[SAMPLES_NUMBER - i - 1]["Data"], " kapitał przed działaniem ", capital)
         if MoneyFlowSamples[i] > 80:
-            actions = actions + (capital / samples.loc[i]["Zamkniecie"])
-            capital = 0.0
+            capital = capital + (actions * samplesArray[i])
+            actions = 0.0
+            # print(samples.loc[SAMPLES_NUMBER - i - 1]["Data"], " kapitał po działaniu ", capital)
             continue
         if MoneyFlowSamples[i] < 20:
-            capital = capital + (actions * samples.loc[i]["Zamkniecie"])
-            actions = 0.0
+            actions = actions + (capital / samplesArray[i])
+            capital = 0.0
+            # print(samples.loc[SAMPLES_NUMBER - i - 1]["Data"], " kapitał po działaniu ", capital)
             continue
         if (MACDsamples[i-1] < SIGNALsamples[i-1]) and (SIGNALsamples[i+1] < MACDsamples[i+1]):
-            capital = capital + (actions * samples.loc[i]["Zamkniecie"])
-            actions = 0.0
+            actions = actions + (capital / samplesArray[i])
+            capital = 0.0
+            # print(samples.loc[SAMPLES_NUMBER - i - 1]["Data"], " kapitał po działaniu ", capital)
             continue
         if(MACDsamples[i - 1] > SIGNALsamples[i - 1]) and (SIGNALsamples[i+1] > MACDsamples[i+1]):
-            actions = actions + (capital / samples.loc[i]["Zamkniecie"])
-            capital = 0.0
+            capital = capital + (actions * samplesArray[i])
+            actions = 0.0
+            # print(samples.loc[SAMPLES_NUMBER - i - 1]["Data"], " kapitał po działaniu ", capital)
     if actions != 0.0:
-        capital = capital + actions * samples.loc[SAMPLES_NUMBER - 1]["Zamkniecie"]
-    print(capital)
+        capital = capital + actions * samplesArray[SAMPLES_NUMBER - 1]
+    print("Końcowy kapitał: ", capital)
 
 
 def main():
